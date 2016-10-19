@@ -185,8 +185,12 @@ class XMLSignatureProcessor(XMLProcessor):
         return self._get_digest_method_by_tag(signature_algorithm_tag, methods=self.known_signature_digest_methods,
                                               known_tags=self.known_signature_digest_tags)
 
-    def _find(self, element, query, require=True, namespace="ds", anywhere=False):
-        if anywhere:
+    # Added node_xpath parameter to find method
+    def _find(self, element, query, require=True, namespace="ds", anywhere=False, node_xpath=None):
+        if node_xpath is not None:
+            # Use Xpath to find Signature element
+            result = element.xpath(node_xpath)
+        elif anywhere:
             result = element.find('.//' + namespace + ":" + query, namespaces=namespaces)
         else:
             result = element.find(namespace + ":" + query, namespaces=namespaces)
@@ -595,7 +599,7 @@ class XMLVerifier(XMLSignatureProcessor):
 
     def verify(self, data, require_x509=True, x509_cert=None, cert_subject_name=None, ca_pem_file=None, ca_path=None,
                hmac_key=None, validate_schema=True, parser=None, uri_resolver=None, id_attribute=None,
-               expect_references=1):
+               expect_references=1, node_xpath=None):
         """
         Verify the XML signature supplied in the data and return the XML node signed by the signature, or raise an
         exception if the signature is not valid. By default, this requires the signature to be generated using a valid
@@ -664,6 +668,12 @@ class XMLVerifier(XMLSignatureProcessor):
             Number of references to expect in the signature. If this is not 1, an array of VerifyResults is returned.
             If set to a non-integer, any number of references is accepted (otherwise a mismatch raises an error).
         :type expect_references: int or boolean
+        :param node_xpath:
+            Xpath to the Signature element. If multiple Signatures elements are present, the XPath can resolve the library 
+            selecting the incorrect Signature element. Without specifying the XPath the library will try to verify the 
+            first Signature element it finds using breath-first traversal. It is recommended to use namespace-prefix 
+            independent XPath expressions to find the Signature element e.g. /*[local-name()='NodeName' and namespace-uri()='NS-uri']
+        :type node_xpath: string
 
         :raises: :py:class:`cryptography.exceptions.InvalidSignature`
 
@@ -683,10 +693,14 @@ class XMLVerifier(XMLSignatureProcessor):
             self.id_attributes = (id_attribute, )
 
         root = self.get_root(data)
-        if root.tag == ds_tag("Signature"):
+        
+        # Chech whether node_xpath is specified. If specified it overides the 'root-search' 
+        # and directly continues to find method
+        if node_xpath is None and root.tag == ds_tag("Signature"):
             signature_ref = root
         else:
-            signature_ref = self._find(root, "Signature", anywhere=True)
+            # Added node_xpath parameter in find method
+            signature_ref = self._find(root, "Signature", anywhere=True, node_xpath=node_xpath)
 
         # HACK: deep copy won't keep root's namespaces
         signature = fromstring(etree.tostring(signature_ref), parser=parser)
