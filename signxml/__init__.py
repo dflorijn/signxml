@@ -189,7 +189,7 @@ class XMLSignatureProcessor(XMLProcessor):
     def _find(self, element, query, require=True, namespace="ds", anywhere=False, node_xpath=None):
         if node_xpath is not None:
             # Use Xpath to find Signature element
-            result = element.xpath(node_xpath)
+            result = element.xpath(node_xpath)[0]
         elif anywhere:
             result = element.find('.//' + namespace + ":" + query, namespaces=namespaces)
         else:
